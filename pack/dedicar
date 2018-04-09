@@ -1,0 +1,192 @@
+######################################################
+## CORES ##
+######################################################
+VERMELHO="\033[00;31;40m"
+VERDE="\033[00;32;40m"
+AMARELO="\033[00;33;40m"
+AZUL="\033[00;34;40m"
+ROSA="\033[00;35;40m"
+CIANO="\033[00;36;40m"
+######################################################
+RESET="\033[00;37;40m"
+######################################################
+dominio=$1
+ipdd=$2
+while true; do
+## Verificando se foi digitado o domínio com o comando
+if [ -z "$dominio" ]
+then
+	echo -e "${VERDE}Digite o domínio que deseja dedicar ou sair para finalizar:${RESET}"
+	read dominio
+fi
+if [ ! -z "$dominio" ]; then
+	if [ ! -z "$ipdd" ]; then
+		echo "Uma linha" >> umalinha.txt
+		umalinha=`cat umalinha.txt`
+	fi
+fi
+## confirma se domínio existe no servidor
+echo "$dominio" > dediquei.info
+v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{ print $1}' | sort > dominios.info
+diff dominios.info dediquei.info | grep ^\> | sed 's/>//g' | sed "/*/d" | sed 's/ //g' | sort > domdedicar.info
+confirmar=`cat domdedicar.info`
+
+## Se o domínio existir, continua dedicando.
+if [ -z $confirmar ]
+then
+## Domínios
+v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{ print $1}' | sort > dominios.info
+
+## Confirma domínio existe no servidor
+confirmaserv=`diff dominios.info dediquei.info | grep ^\> | sed 's/>//g' | sed "/*/d" | sed 's/ //g' | sort`
+
+## Dominios dedicados
+cat /etc/mailips | cut -d: -f1 | sed 's/>//g' | sed "/*/d" | sort > domdedicado.info
+
+## Confirma domínio existe no mailips
+confirmamail=`diff domdedicado.info dediquei.info | grep ^\> | sed 's/>//g' | sed "/*/d" | sed 's/ //g' | sort`
+
+## Lógica de verificação do domínio
+	if [ -z "$confirmaserv" ]
+		then
+		if [ -z "$confirmamail" ]
+		        then
+		        sed -i "/\<$dominio\>/d" /etc/mailips
+		        echo ""
+		        echo -e "${VERDE}Domínio encontrado no servidor"
+				if [ -z "$ipdd" ]
+				then
+		        	echo -e "${RESET}Estes são os IPS disponíveis para dedicar:"
+		    	else
+		    		sleep 0
+		    	fi
+	else
+	            echo ""
+	            echo -e "${VERDE}Domínio encontrado no servidor"
+    fi
+else
+	echo -e "${VERMELHO}Domínio não existe no servidor, crie a conta antes de prosseguir."
+	echo -e "${RESET}"
+	exit 1      
+fi
+
+## IP PRINCIPAL:
+IPPRINCIPAL=`ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | grep -n ^ | grep -w ^1 | cut -f2 -d:`
+
+## Pegando todos os IPS do servidor
+ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | sed 's/ //g' | sort | sed "/\<$IPPRINCIPAL\>/d" > ips
+    cat /etc/mailips | cut -f2 -d: | sed 's/ //g' | sort > mailip.info
+    diff mailip.info ips | grep ^\> | sort | sed -s 's/>//g' | sed -s 's/ //g' > mailips
+
+verificarip () {
+if [ -z "$ipdd" ];then
+	echo -e "${AMARELO}Qual IP deseja dedicar para o domínio:${VERDE} ${dominio}${RESET}?"
+	cat mailips
+	echo -e ""
+	read ipdd
+fi
+if grep -w -q $ipdd ips
+	then
+	        echo -e "${RESET}Dedicando..."
+	        sleep 1
+	        clear
+	else
+		clear
+	    echo -e "${VERMELHO}IP não disponível neste servidor."
+	    echo -e ""
+	    echo -e "${RESET}Escolha um dos IPs abaixo:"
+	    cat mailips
+	    echo -e ""
+	    read ipdd
+	    verificarip;
+	fi
+}
+
+iplivre () {
+IPSLIVRE=`cat mailips`
+if [ -z "$IPSLIVRE" ]
+	then
+	    echo -e "${VERMELHO}Todos os IPs já dedicados"
+	    echo -e "${RESET}"
+	    exit 0
+	else
+		echo -e "${RESET}"
+		verificarip
+	fi
+}
+
+iplivre
+
+
+## Alteração do mailips e mailhelo e resultado
+grep \<$ipdd\> /etc/mailips > deletado.info
+sed -i "/\<$ipdd\>/d" /etc/mailips
+sed -i "/\<$dominio\>/d" /etc/mailips
+echo "$dominio: $ipdd" >> /etc/mailips
+sort /etc/mailips > tempips
+cat tempips > /etc/mailips
+DELETEI=`cat deletado.info`
+
+user=`find /home/*/web -type d -name $dominio | cut -d/ -f3`
+
+for ID in `v-list-dns-records $user $dominio | grep smtp | awk '{print $1}'`; do
+	v-delete-dns-record $user $dominio $ID
+done;
+
+v-add-dns-record $user $dominio smtp A $ipdd 2>> /dev/null
+
+if [ ! -z "$umalinha" ];then
+	sleep 0
+else
+	if [ -z "$DELETEI" ]
+	then
+		echo -e "${VERDE}Nova entrada adicionada no mailips${RESET}"
+		echo ""
+	else
+		echo -e "A entrada${VERMELHO} $DELETEI${RESET} foi removida do mailips"
+		echo ""
+	fi
+fi
+
+## Domínio principal
+dominioprincipal=`cat /home/vtinstall/vartemp/dominiobase`
+
+## Registro
+echo "$dominio dedicado para $ipdd em $(date +%d)/$(date +%b)/$(date +%Y) $(date +%r)" >> /var/log/log_dedicar.info
+
+## Exibe o reverso atual
+dig smtp.$dominio +short > reverso.info
+echo -e "${VERMELHO}Verificando reverso:${RESET}"
+for reverso in `cat reverso.info`;do
+	reverso2=`dig -x $reverso +short`
+	reversoip=`dig -x $ipdd +short`
+if [ $reverso == $reversoip ]; then
+	echo -e "${ROSA}$reverso ${RESET}aponta para ${VERDE}${reverso2}${RESET}" | sed -e "s/$\.//g"
+	echo -e "${VERDE}smtp.$dominio ${RESET}aponta para ${ROSA}${reverso}${RESET}"
+elif [[ -z $reverso && -z ${reverso2} ]]; then
+	echo -e "${VERMELHO}Reverso não propagado ou configurado errado.${RESET}"
+else
+	echo -e "${ROSA}$ipdd ${RESET}aponta para ${VERDE}${reversoip}${RESET}" | sed -e "s/$\.//g"
+	echo -e "${VERDE}smtp.$dominio ${RESET}aponta para ${ROSA}${reverso}${RESET}"
+fi
+done
+
+
+## Reset mailhelo
+> /etc/mailhelo
+for dominio in `v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{ print $1}'`; do echo "$dominio: smtp.$dominio" >> /etc/mailhelo ;done
+sed -i "/^\<$dominioprincipal\>/d" /etc/mailhelo
+
+## Deletando arquivos usados
+rm -Rf reverso.info tempips dominios.info ips deletado.info mailips ipddtemp mailip.info seusado domdedicado.info verificadom.temp dediquei.info domdedicar.info umalinha.txt
+ipuso
+exit 0
+        elif [ "$dominio" == "sair" ]
+        then
+            echo "Finalizado"
+            exit 0
+        else [ $dominio != "$confirmar||sair" ]
+            echo "Digite somente o domínio ou sair para finalizar:"
+            read dominio 
+        fi
+done

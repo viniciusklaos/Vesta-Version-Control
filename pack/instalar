@@ -1,0 +1,209 @@
+DOMAIN=$1
+IPDD=$2
+##################### CORES #################
+VERMELHO="\033[01;31;40m"
+VERDE="\033[01;32;40m"
+AMARELO="\033[01;33;40m"
+AZUL="\033[01;34;40m"
+ROSA="\033[01;35;40m"
+CIANO="\033[01;36;40m"
+RESET="\033[00;37;40m"
+#############################################
+if [ ! -f /home/vtinstall/vartemp/ftpconfigurado.info ]; then
+	v-change-sys-timezone America/Sao_Paulo
+	v-change-sys-language pt-BR
+	HOSTFTP=`cat /home/vtinstall/vartemp/hostftp.info`
+	USUARIOFTP=`cat /home/vtinstall/vartemp/usuarioftp.info`
+	SENHAFTP=`cat /home/vtinstall/vartemp/senhaftp.info`
+	PRINCIPAL=`hostname | cut -d. -f2-100`
+	ftp -v -in <<- EOF
+	open $HOSTFTP
+	user $USUARIOFTP $SENHAFTP
+	bin
+	cd vesta_backups
+	mkdir $PRINCIPAL
+	bye
+	EOF
+	v-add-backup-host sftp $HOSTFTP $USUARIOFTP $SENHAFTP /home/backupvp/vesta_backups/$PRINCIPAL
+	DATA=`date`
+	echo "$DATA" > /home/vtinstall/vartemp/ftpconfigurado.info
+fi
+if [ -z "$DOMAIN" ]; then
+	echo -e "${AMARELO}Qual dominio da conta a ser configurada?${AZUL}"
+	read DOMAIN
+fi
+IPPRINCIPAL=`ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | grep -n ^ | grep -w ^1 | cut -f2 -d:`
+ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | sort | sed "/$IPPRINCIPAL/d" > ips.info
+	cat /etc/mailips | cut -d: -f2 | sed 's/ //g' | sort > ipdedicado.info
+	IPSLIVRE=`diff ipdedicado.info ips.info | grep ^\> | sed 's/> //g'`
+	if [ -z "$IPSLIVRE" ]
+	then
+		clear
+		echo -e "${VERMELHO} Sem IPS livres para dedicar na maquina${RESET}"
+		sleep 3
+		exit
+	else
+		if [ -z "$IPDD" ]; then
+			echo -e "${VERDE}IPS Disponiveis:"
+			echo $IPSLIVRE | sed 's/ /\n/g'
+			echo -e "${RESET}"
+		fi
+	fi
+rm -Rf ipdedicado.info
+#
+if [ -z "$IPDD" ]; then
+	echo -e "${AMARELO}Qual IP deseja dedicar para o domínio:${VERDE} $DOMAIN ?"
+	read IPDD
+fi
+if grep -w -q $IPDD ips.info; then
+	if grep -q -w $IPDD /etc/mailips; then
+		clear
+		echo "IP já utilizado por outro cliente."
+		sleep 1
+		echo -e "${VERDE}."
+		sleep 1
+		echo -e "${AMARELO}."
+		sleep 1
+		echo -e "${VERMELHO}.${RESET}"
+		sleep 1
+		exit
+	fi
+else
+	clear
+	echo -e "${VERMELHO}IP não disponível neste servidor."
+	sleep 1
+	echo -e "${VERDE}."
+	sleep 1
+	echo -e "${AMARELO}."
+	sleep 1
+	echo -e "${VERMELHO}.${RESET}"
+	sleep 1
+	exit
+fi
+rm -Rf ips.info
+#
+echo $DOMAIN > /home/vtinstall/vartemp/domaintemp
+cd /home/vtinstall/vartemp
+tr -dc "a-z" < /home/vtinstall/vartemp/domaintemp > /home/vtinstall/vartemp/lgtmp
+USER=`cat /home/vtinstall/vartemp/lgtmp | cut -c 1-8`
+## -- Verificando se já existe uma conta com este nome:
+if [ -d /home/$USER ]; then
+	echo $USER > /home/vtinstall/vartemp/loginconflito
+	loginconflito=`cat /home/vtinstall/vartemp/loginconflito`
+	logincerto=`echo $loginconflito | cut -c 1-7`
+	numerologin=`echo $loginconflito | cut -c 8`
+	if [[ $numerologin = [[:digit:]] ]]; then
+		echo "${logincerto}$((${numerologin}+1))" > /home/vtinstall/vartemp/loginconflito
+else
+		echo "${logincerto}1" > /home/vtinstall/vartemp/loginconflito
+	fi
+	USER=`cat /home/vtinstall/vartemp/loginconflito`
+	clear
+	echo ""
+	echo -e "${AMARELO}Este login da conta já existe, e o mesmo foi alterado para:${VERDE} $USER ${RESET}"
+	sleep 3
+	else
+		echo ""
+		sleep 0
+fi
+cd /home/vtinstall/vartemp/
+curl -s -O http://rep.vitalhost.com.br/v4/semcpanel/vitchun.info 2>> /dev/null
+PASS=`cat /home/vtinstall/vartemp/vitchun.info`
+rm -f /home/vtinstall/vartemp/vitchun.info
+MAINIP=`v-list-sys-ips | tail -n +3 | tail -2 | awk '{print $1}' | head -1`
+SECIP=`v-list-sys-ips | tail -n +3 | tail -2 | awk '{print $1}' | tail -1`
+SPF=`ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | cut -f1-3 -d. | uniq | sed 's/^/+ip4:/' | sed 's/$/.0\/24 /' | sed 's/ //g' |sed ':a;$!N;s/\n/ /;ta;'`
+v-add-user $USER $PASS contato@$DOMAIN default $DOMAIN Vesta 2>> /dev/null
+v-add-domain $USER $DOMAIN $MAINIP 2>> /dev/null
+
+v-change-dns-domain-tpl $USER $DOMAIN child-ns no 2>> /dev/null
+v-change-dns-domain-soa $USER $DOMAIN ns1.$DOMAIN no 2>> /dev/null
+
+NS2FIELD=`v-list-dns-records $USER $DOMAIN | grep -w ns2.*.A | awk '{print $1}'`
+SPFIELD=`v-list-dns-records $USER $DOMAIN | grep -w  v=spf1 | awk '{print $1}'`
+
+v-change-dns-record $USER $DOMAIN $NS2FIELD $SECIP 2>> /dev/null
+v-change-dns-record $USER $DOMAIN $SPFIELD "\"v=spf1 +a +mx $SPF ~all\"" 2>> /dev/null
+v-add-dns-record $USER $DOMAIN vesta A $MAINIP 2>> /dev/null
+
+for SMTPFIELD in `v-list-dns-records $USER $DOMAIN | grep -w smtp | awk '{print $1}'`; do
+	v-delete-dns-record $USER $DOMAIN $SMTPFIELD;
+done;
+
+for IP in `v-list-sys-ips | tail -n +3 | awk '{print $1}' | sed "/$MAINIP/d"`; do
+	v-add-dns-record $USER $DOMAIN smtp A $IP 2>> /dev/null; 
+done;
+
+v-delete-mail-domain-dkim $USER $DOMAIN 2>> /dev/null
+v-add-mail-domain-dkim $USER $DOMAIN 2>> /dev/null
+
+sed -i "s/180/5400/g" /home/$USER/conf/dns/$DOMAIN.db 2>> /dev/null
+
+if grep -w -q "180" /usr/local/vesta/func/domain.sh; then
+	echo "Corrigindo TTL Serial do VESTA..."
+	sed -i "s/180/5400/g" /usr/local/vesta/func/domain.sh 2>> /dev/null
+fi
+
+v-add-mail-account $USER $DOMAIN contato $PASS 1024 2>> /dev/null
+v-add-mail-account $USER $DOMAIN erros red17pmta 1024 2>> /dev/null
+v-add-mail-account $USER $DOMAIN postmaster $PASS 1024 2>> /dev/null
+v-add-mail-account $USER $DOMAIN abuse $PASS 1024 2>> /dev/null
+v-add-database $USER banco dbuser phCA24bgK mysql localhost 2>> /dev/null
+v-add-cron-job $USER \*/2 \* \* \* \* "php -f /home/$USER/web/$DOMAIN/public_html/admin/cron/cron.php" 2>> /dev/null
+v-add-cron-job $USER 0 \*/3 \* \* \* "php -f /home/$USER/web/$DOMAIN/public_html/admin/cron/limpeza.php" 2>> /dev/null
+echo "$DOMAIN: $IPDD" >> /etc/mailips
+echo "$DOMAIN: smtp.$DOMAIN" >> /etc/mailhelo
+
+echo "<?php
+
+define('SENDSTUDIO_DATABASE_TYPE', 'mysql');
+define('SENDSTUDIO_DATABASE_USER', '"$USER"_dbuser');
+define('SENDSTUDIO_DATABASE_PASS', '"$PASS"');
+define('SENDSTUDIO_DATABASE_HOST', 'localhost');
+define('SENDSTUDIO_DATABASE_NAME', '"$USER"_banco');
+define('SENDSTUDIO_DATABASE_UTF8PATCH', '1');
+define('SENDSTUDIO_TABLEPREFIX', 'email_');
+define('SENDSTUDIO_LICENSEKEY', 'Intecorp');
+define('SENDSTUDIO_APPLICATION_URL', 'http://"$DOMAIN"');
+define('SENDSTUDIO_IS_SETUP', 1);" > /home/$USER/web/$DOMAIN/public_html/admin/includes/config.php
+#
+cd /home/$USER/web
+curl -O http://rep.vitalhost.com.br/v4/vestacp/db.tar.gz 2>> /dev/null
+curl -O http://rep.vitalhost.com.br/v4/semcpanel/spamtraps.tar.gz 2>> /dev/null
+tar -vxzf db.tar.gz
+tar -vxzf spamtraps.tar.gz
+mysql "$USER"_banco < base1.sql
+mysql "$USER"_banco < spamtraps.sql
+rm -f spamtraps.tar.gz db.tar.gz base1.sql spamtraps.sql
+
+find /home/$USER/web/$DOMAIN/public_html/ -type f -exec chmod 644 '{}' \;
+find /home/$USER/web/$DOMAIN/public_html/ -type d -exec chmod 755 '{}' \;
+
+IEMLOGIN=`echo $DOMAIN | cut -d. -f1`
+
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'erros@${DOMAIN}' WHERE area = 'BOUNCE_ADDRESS';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'contato@${DOMAIN}' WHERE area = 'EMAIL_ADDRESS';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'mail.${DOMAIN}' WHERE area = 'BOUNCE_SERVER';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'erros@${DOMAIN}' WHERE area = 'BOUNCE_USERNAME';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'red17pmta' WHERE area = 'BOUNCE_PASSWORD';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = '/notls' WHERE area = 'BOUNCE_EXTRASETTINGS';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = '1' WHERE area = 'BOUNCE_AGREEDELETE';"
+mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = '1' WHERE area = 'BOUNCE_AGREEDELETEALL';"
+mysql -u root ${USER}_banco -e "UPDATE email_users SET emailaddress = 'contato@${DOMAIN}';"
+mysql -u root ${USER}_banco -e "UPDATE email_users SET usertimezone = 'GMT-3:00';"
+mysql -u root ${USER}_banco -e "UPDATE email_users SET username = '${IEMLOGIN}' WHERE username ='changeme';"
+mysql -u root ${USER}_banco -e "UPDATE email_users SET htmlfooter = '<img title="Novidade" alt="Novidade" height="42" width="242" src="http://${DOMAIN}/transparente.png">';"
+mysql -u root ${USER}_banco -e "UPDATE email_users SET textfooter = '';"
+mysql -u root ${USER}_banco -e "UPDATE email_users SET adminnotify_email = 'contato@${DOMAIN}';"
+mysql -u root ${USER}_banco -e "UPDATE user_script SET username = '${IEMLOGIN}' WHERE username = 'gemeosvt';"
+service named restart
+clear
+echo -e "${AMARELO}DNS:"
+echo "ns1.$DOMAIN > $MAINIP"
+echo "ns2.$DOMAIN > $SECIP"
+echo ""
+echo "Reverso:"
+echo -e "smtp.$DOMAIN > $IPDD"
+echo ""
+echo ""
+echo -e "Instalacao concluida.${RESET}"

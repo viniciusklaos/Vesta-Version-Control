@@ -1,0 +1,28 @@
+MAIL=$1
+INPUT1=$2
+
+if [ -z "$MAIL" ]; then
+	echo "Qual email deseja redirecionar?"
+	read MAIL
+fi
+
+if [ -z "$INPUT1" ]; then
+	echo "Para qual e-mail?"
+	read INPUT1
+fi
+
+CONTA=`echo $MAIL | cut -d@ -f1`
+DOMAIN=`echo $MAIL | cut -d@ -f2`
+LOGIN=`find /home/*/web -type d -name $DOMAIN | cut -d/ -f3`
+
+if [ -z "$LOGIN" ]; then
+	echo "Dominio não encontrado no servidor."
+else
+	EXISTE=`find /home/*/mail/$DOMAIN -type d -name $CONTA`
+	if [ -z "$EXISTE" ]; then
+		echo "Conta de email nao existe no servidor."
+	else
+	v-add-mail-account-forward ${LOGIN} ${DOMAIN} ${CONTA} ${INPUT1}
+	echo "$MAIL redirecionado para $INPUT1 com sucesso."
+	fi
+fi

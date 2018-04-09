@@ -1,0 +1,89 @@
+#!/bin/bash
+
+##################### CORES #################
+VERMELHO="\033[01;31;40m"
+VERDE="\033[01;32;40m"
+AMARELO="\033[01;33;40m"
+AZUL="\033[01;34;40m"
+ROSA="\033[01;35;40m"
+CIANO="\033[01;36;40m"
+RESET="\033[00;37;40m"
+#############################################
+
+HOSTNAME=`hostname`
+
+if [ -d /var/cpanel ]; then
+	PLATAFORMA="CPanel"
+elif [ -d /usr/local/vesta ]; then
+	PLATAFORMA="VestaCP"
+else
+	PLATAFORMA="Desconhecida"
+fi
+
+Load1=`cat /proc/loadavg | awk '{print $1}'`
+Load5=`cat /proc/loadavg | awk '{print $2}'`
+Load15=`cat /proc/loadavg | awk '{print $3}'`
+
+
+DATA=`date`
+ESPACO=`df -h | grep -n ^ | grep ^2 | awk '{print $5}'`
+INODE=`df -i | grep -n ^ | grep ^2 | awk '{print $5}'`
+
+# VERIFICANDO MEMORIA
+MemTotal=`expr $(cat /proc/meminfo | grep -F "MemTotal:" | awk '{print $2}') '/' 1024`
+MemFree=`expr $(cat /proc/meminfo | grep -F "MemFree:" | awk '{print $2}') '/' 1024`
+
+
+# PROCESSOS DO PMTA
+if [ -f /etc/pmta/config ]; then
+	PMTATOTAL=0; PMTATOTAL=0; for i in `ps gawux | grep pmta | grep -v root | awk '{print $2}'`; do PMTATAMANHO=`pmap -d $i | tail -1 | awk '{print $4}' | sed 's/K//'`
+	let PMTATOTAL=PMTATOTAL+PMTATAMANHO
+	PMTAPROCESS=`expr $PMTAPROCESS + 1`
+	done
+fi
+
+# PROCESSOS DO APACHE
+APACHETOTAL=0; APACHEPROCESSOS=0; for i in `ps gawux | grep apache | grep -v root | awk '{print $2}'`; do APACHETAMANHO=`pmap -d $i | tail -1 | awk '{print $4}' | sed 's/K//'`
+let APACHETOTAL=APACHETOTAL+APACHETAMANHO
+APACHEPROCESSOS=`expr $APACHEPROCESSOS + 1`
+done
+
+# PROCESSOS DO MYSQL
+MYSQLTOTAL=0; MYSQLPROCESSOS=0; for i in `ps gawux | grep mysqld | grep -v root | awk '{print $2}'`; do MYSQLTAMANHO=`pmap -d $i | tail -1 | awk '{print $4}' | sed 's/K//'`
+let MYSQLTOTAL=MYSQLTOTAL+MYSQLTAMANHO
+MYSQLPROCESSOS=`expr $MYSQLPROCESSOS + 1`
+done
+
+# PROCESSOS DO EXIM
+EXIMTOTAL=0; EXIMPROCESS=0; for i in `ps gawux | grep exim | grep -v root | awk '{print $2}'`; do EXIMTAMANHO=`pmap -d $i | tail -1 | awk '{print $4}' | sed 's/K//'`
+let EXIMTOTAL=EXIMTOTAL+EXIMTAMANHO
+EXIMPROCESS=`expr $EXIMPROCESS + 1`
+done
+
+# ECHOS
+
+echo -e "${RESET}"
+echo -e "${CIANO}Servidor: ${ROSA}$HOSTNAME"
+echo -e "${CIANO}Plataforma: ${ROSA}$PLATAFORMA"
+echo -e "${CIANO}Data: ${ROSA}$DATA"
+echo -e ""
+echo -e "${CIANO}Espaço em disco: ${ROSA}$ESPACO"
+echo -e "${CIANO}Inodes: ${ROSA}$INODE"
+echo -e ""
+echo -e "${CIANO}Carga do servidor (load):"
+echo -e "${CIANO}Load atual:${ROSA} $Load1"
+echo -e "${CIANO}Load a 5 minutos:${ROSA} $Load5"
+echo -e "${CIANO}Load a 15 minutos:${ROSA} $Load15"
+echo ""
+echo -e "${CIANO}Memoria total:${VERDE} ${MemTotal} Mb"
+echo -e "${CIANO}Memoria livre:${AMARELO} ${MemFree} Mb"
+echo ""
+echo -e "${CIANO}Numero de Processos | ${ROSA}Memoria utilizada:"
+if [ -f /etc/pmta/config ]; then
+	echo -e "${CIANO}PMTA : $PMTAPROCESS |${ROSA} $(expr $PMTATOTAL / 1024) Mb"
+fi
+echo -e "${CIANO}APACHE : $APACHEPROCESSOS |${ROSA} $(expr $APACHETOTAL / 1024) Mb"
+echo -e "${CIANO}MYSQL : $MYSQLPROCESSOS |${ROSA} $(expr $MYSQLTOTAL / 1024) Mb"
+echo -e "${CIANO}EXIM : $EXIMPROCESS |${ROSA} $(expr $EXIMTOTAL / 1024) Mb"
+echo -e "${RESET}"
+

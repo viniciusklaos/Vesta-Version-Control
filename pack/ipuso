@@ -1,0 +1,198 @@
+######################################################
+## CORES ##
+######################################################
+VERMELHO="\033[00;31;40m"
+VERDE="\033[00;32;40m"
+AMARELO="\033[00;33;40m"
+AZUL="\033[00;34;40m"
+ROSA="\033[00;35;40m"
+CIANO="\033[00;36;40m"
+######################################################
+RESET="\033[00;37;40m"
+######################################################
+
+############################################################################################################
+#Deletar domínio extra do mailips e hello
+############################################################################################################
+## Domínios
+v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{ print $1}' | sed '/vesta./d' | sort > dominios.info
+
+## Dominios dedicados
+cat /etc/mailips | cut -d: -f1 | sed "s/>//g" | sed "/*/d" | sort > domdedicado.info
+
+## Diferença entre domínios e domínios dedicados
+diff dominios.info domdedicado.info | grep ^\> | sed "/*/d" | sed "s/>//g" | sed "s/ //g" | sort > domextra.info
+
+## Confirma domínio sobrando
+diff dominios.info domextra.info | grep ^\> | sed "/*/d" | sed "s/>//g" | sed "s/ //g" | sort > deletar.info
+
+## Deleta domínio do mailips
+for deletarextra in `cat deletar.info`; do
+	sed -i "/\<$deletarextra\>/d" /etc/mailips
+	sed -i "/\<$deletarextra\>/d" /etc/mailhelo
+ done;
+rm -Rf deletar.info domextra.info dominios.info domdedicado.info
+
+############################################################################################################
+#IPUSO
+############################################################################################################
+
+## IP PRINCIPAL:
+IPPRINCIPAL=`ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | grep -n ^ | grep -w ^1 | cut -f2 -d:`
+
+## IPS:
+IPS=`ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | sort`
+echo "$IPS" > ips.info
+
+## Domínios
+v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{ print $1}' | sed '/vesta./d' | sort > dominios.info
+
+## Domínio principal
+if [ -d "/home/vtinstall/vartemp/" ]; then
+	cat /home/vtinstall/vartemp/dominiobase > dom1.temp
+	hostname | sed "s/^vesta.//g" > dom2.temp
+	resultdom=`diff dom1.temp dom2.temp`
+	if [ ! -z "$resultdom" ]; then
+		echo "hostname errado"
+		exit
+	else
+		dominioprincipal=`hostname | sed "s/^vesta.//g"`
+	fi
+else
+	echo -e "${VERMELHO}Servido sem menu.${RESET}"
+	exit
+fi
+
+## IPS dedicados
+cat /etc/mailips | cut -d: -f2 | sed "s/ //g" | sort > ipdedicado.info
+
+## Dominios dedicados
+cat /etc/mailips | cut -d: -f1 | sed "s/ //g" | sort > domdedicado.info
+
+## IPS Livres
+diff ipdedicado.info ips.info | grep ^\> | sed "s/> /Disponível: /g" | sed "/\<$IPPRINCIPAL\>/d" > livres.info
+
+## Domínios livres
+diff domdedicado.info dominios.info | grep ^\> | sed "s/>//g" | sed "s/ //g" | sed "/^$dominioprincipal/d" > domlivres.info
+
+## Apresentar dominios dedicados com IP
+cat /etc/mailips | sed "/*/d" | sort | sed "s/: / >> >> /g" > mailips.info
+
+# PRINT
+
+## Domínios suspensos
+if [ -d "/var/spool/cron.suspended/" ]; then
+dir /var/spool/cron.suspended/ > pastasus.temp
+else
+	> pastasus.temp
+fi
+pastasus=`cat pastasus.temp`
+if [ -z "$pastasus" ]; then
+	> domsus.info
+	> domsus2.info
+else
+	> domsus.info
+	> domsus2.info
+	for conta in `grep "/public_html/admin/cron/cron.php" /var/spool/cron.suspended/* | cut -d: -f2 | cut -d/ -f7`; do
+	grep "\<$conta\>" /etc/trueuserdomains | cut -d: -f1 | sort >> csusp.info; done
+	for dominio in `cat "csusp.info"`; do
+	grep "\<$dominio\>" /etc/mailips | sed "s/: / >> >> /g" >> domsus.info; done;
+	for dominio2 in `cat "csusp.info"`; do
+	grep -o "\<$dominio2\>" domlivres.info >> domsus2.info; done;
+	for suspenso in `cat csusp.info`; do
+	sed -i "/\<$suspenso\>/d"	domlivres.info; done;
+	for suspenso2 in `cat csusp.info`; do
+	sed -i "/\<$suspenso2\>/d" mailips.info; done;
+fi
+
+##Mostrando IP e domínio principal
+tip=`cat ips.info | wc -l`
+tdom=`cat dominios.info | wc -l`
+echo -e "${RESET}================================================"
+echo -e "${RESET}Domínio principal:${CIANO} $dominioprincipal"
+echo -e "${RESET}IP Principal:${CIANO} $IPPRINCIPAL"
+echo -e "${RESET}Total de IPs:${AMARELO} $tip"
+echo -e "${RESET}Total de dominios:${AMARELO} $tdom"
+echo -e "${RESET}"
+
+##Testando se arquivo /etc/mailips está vazio e exibindo resultado
+ndedic=`cat mailips.info | wc -l`
+nsus=`cat domsus.info | wc -l`
+MAILLIVRE=`cat mailips.info`
+if [ ! -z "$MAILLIVRE" ]
+	then
+		echo -e "${CIANO}Dedicado(s):"
+		echo -e "${AMARELO}Ativo(s)${ROSA}($ndedic)${RESET}:"
+		cat mailips.info
+		if [ -s domsus.info ]
+				then
+		echo -e "${AMARELO}Suspenso(s)${ROSA}($nsus)${RESET}:${VERMELHO}"
+		cat domsus.info
+		fi
+	else
+		if [ -s domsus.info ]
+				then
+		echo -e "${AMARELO}Suspenso(s)${ROSA}($nsus)${RESET}:${VERMELHO}"
+		cat domsus.info
+		fi
+fi
+
+##Testando se arquivo existem domínios sem dedicar e exibindo resultado
+doml=`cat domlivres.info | wc -l`
+nsus2=`cat  domsus2.info | wc -l`
+DOMLIVRE=`cat domlivres.info`
+if [ -s domlivres.info ]
+	then
+		echo -e "${RESET}"
+		echo -e "${CIANO}Sem dedicar${RESET}:"
+		echo -e "${AMARELO}Ativo(s)${ROSA}($doml)${RESET}:"
+		cat domlivres.info
+			if [ -s domsus2.info ]
+				then
+			echo -e "${AMARELO}Suspenso(s)${ROSA}($nsus2)${RESET}:${VERMELHO}"
+			cat domsus2.info
+			fi
+	else
+				if [ -s domsus2.info ]
+					then
+				echo -e "${RESET}"
+				echo -e "${CIANO}Sem dedicar${RESET}:"
+				echo -e "${AMARELO}Suspenso(s)${ROSA}($nsus2)${RESET}:${VERMELHO}"
+				cat domsus2.info
+				fi
+fi
+#Verifica se algum IP está sendo usado no PMTA
+if [ -d /etc/pmta ]; then
+	for ip in `ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | sort`; do
+	grep -o "\<$ip\>" /etc/exim/exim.pl > myrelay.info; done
+	if [ -s myrelay.info ]; then
+		for ip in `ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | sort`; do
+		grep -o "\<$ip\>" /etc/exim/exim.pl >> ipmy.info ; done
+		nmy=`cat ipmy.info | wc -l`
+		echo -e "${RESET}"
+		echo -e "${AMARELO}IP(s) utilizados no My Relay${ROSA}($nmy)${RESET}:"
+		cat ipmy.info
+		for imy in `cat ipmy.info`; do
+		sed -i "/\<$imy\>/d" livres.info; done;
+	fi
+fi
+
+#Verifica se algum IP está sendo usado no MyRelay
+
+
+##Testando se arquivo existem IPs livres e exibindo resultado
+ipl=`cat livres.info | wc -l`
+IPSLIVRE=`cat livres.info`
+if [ -z "$IPSLIVRE" ]
+	then
+		echo -e "${RESET}================================================"
+	else
+		echo -e "${RESET}"
+		echo -e "${AMARELO}IP(s) livre(s)${ROSA}($ipl)${RESET}:"
+		cat livres.info
+		echo -e "${RESET}================================================"
+fi
+
+#Deletando arquivos usados
+rm -rf mailips.info livres.info domlivres.info dominios.info ipdedicado.info ips.info domdedicado.info csusp.info domsus.info dom1.temp dom2.temp domsus2.info domsus.temp domsus2.temp pastasus.temp /etc/mailips.tmp ippmta.info ipmy.info myrelay.info
+

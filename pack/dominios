@@ -1,0 +1,2 @@
+v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{ print $1}' | sed '/vesta./d'
+

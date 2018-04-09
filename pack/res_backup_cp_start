@@ -1,0 +1,86 @@
+cd /home
+
+BACKUP=`cat /tmp/backup_res.temp`
+DOMAIN=`cat /tmp/domain_res.temp`
+LOGIN=`cat /tmp/login_res.temp`
+DOMAIN_SV=`cat /tmp/domain_sv_res.temp`
+
+echo "$BACKUP esta sendo restaurado na conta $LOGIN" > /var/log/res_${DOMAIN_SV}_cp.info
+echo "com o dominio $DOMAIN_SV" >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+
+rm -Rf /home/$LOGIN/web/$DOMAIN_SV/public_html/*
+mkdir CPANEL
+tar -vxzf $BACKUP -C CPANEL
+
+echo "Extraindo o backup..." >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+
+rm -Rf $BACKUP
+cd CPANEL/$DOMAIN
+
+if [ $DOMAIN == $DOMAIN_SV ]; then
+	echo "Extraindo a public_html..." >> /var/log/res_${DOMAIN_SV}_cp.info
+	tar -vxzf public_html.tar.gz -C /home/$LOGIN/web/$DOMAIN/public_html/
+	chown -R $LOGIN.$LOGIN /home/$LOGIN/web/$DOMAIN/public_html
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	cd banco
+	echo "Injetando banco..." >> /var/log/res_${DOMAIN_SV}_cp.info
+	mysql ${LOGIN}_banco < dados.sql
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	rm -Rf /home/CPANEL
+	rm -f /tmp/backup_res.temp
+	rm -f /tmp/login_res.temp
+	rm -f /tmp/domain_res.temp
+	rm -f /tmp/domain_sv_res.temp
+else
+	echo "Extraindo a public_html..." >> /var/log/res_${DOMAIN_SV}_cp.info
+	tar -vxzf public_html.tar.gz -C /home/$LOGIN/web/$DOMAIN_SV/public_html/
+	chown -R $LOGIN.$LOGIN /home/$LOGIN/web/$DOMAIN_SV/public_html
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "Alterando dominio no config.php..." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "<?php
+
+define('SENDSTUDIO_DATABASE_TYPE', 'mysql');
+define('SENDSTUDIO_DATABASE_USER', '"$LOGIN"_dbuser');
+define('SENDSTUDIO_DATABASE_PASS', 'phCA24bgK');
+define('SENDSTUDIO_DATABASE_HOST', 'localhost');
+define('SENDSTUDIO_DATABASE_NAME', '"$LOGIN"_banco');
+define('SENDSTUDIO_DATABASE_UTF8PATCH', '1');
+define('SENDSTUDIO_TABLEPREFIX', 'email_');
+define('SENDSTUDIO_LICENSEKEY', 'Intecorp');
+define('SENDSTUDIO_APPLICATION_URL', 'http://"$DOMAIN_SV"');
+define('SENDSTUDIO_IS_SETUP', 1);" > /home/$LOGIN/web/$DOMAIN_SV/public_html/admin/includes/config.php
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	cd banco
+	echo "Injetando banco..." >> /var/log/res_${DOMAIN_SV}_cp.info
+	mysql ${LOGIN}_banco < dados.sql;
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "Altrando emails e campanhas para o novo dominio..." >> /var/log/res_${DOMAIN_SV}_cp.info
+	mysql -u root ${LOGIN}_banco -e "UPDATE email_config_settings SET areavalue = 'erros@$DOMAIN_SV' WHERE area = 'BOUNCE_ADDRESS';"
+	mysql -u root ${LOGIN}_banco -e "UPDATE email_config_settings SET areavalue = 'contato@$DOMAIN_SV' WHERE area = 'EMAIL_ADDRESS';"
+	mysql -u root ${LOGIN}_banco -e "UPDATE email_users SET emailaddress = 'contato@$DOMAIN_SV';"
+	mysql -u root ${LOGIN}_banco -e "UPDATE email_lists SET owneremail = 'contato@$DOMAIN_SV', bounceemail = 'erros@$DOMAIN_SV', replytoemail = 'contato@$DOMAIN_SV';"
+	mysql -u root ${LOGIN}_banco -e "UPDATE email_newsletters SET htmlbody = REPLACE(htmlbody, '$DOMAIN', '$DOMAIN_SV');"
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+	rm -Rf /home/CPANEL;
+	rm -f /tmp/backup_res.temp
+	rm -f /tmp/login_res.temp
+	rm -f /tmp/domain_res.temp
+	rm -f /tmp/domain_sv_res.temp
+fi
+DATA=`date`
+echo "$BACKUP restaurado na conta $LOGIN" >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "com o dominio $DOMAIN_SV" >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "$DATA" >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "." >> /var/log/res_${DOMAIN_SV}_cp.info
+echo "Restauracao concluida." >> /var/log/res_${DOMAIN_SV}_cp.info

@@ -1,0 +1,30 @@
+BACKUP=$1
+if [ -z "$BACKUP" ]; then
+	echo -e "Qual VTBACKUP voce quer restaurar? (.tar.gz)"
+	ls
+	read BACKUP
+fi
+DOMAIN=`echo $BACKUP | rev | cut -c8-300 | rev`
+LOGIN=`find /home/*/web -type d -name $DOMAIN | cut -d/ -f3`
+
+if [ -z "$LOGIN" ]; then
+	echo -e "Deseja restaurar em qual conta? (dominio)"
+	echo ""
+	dominios
+	echo ""
+	read DOMAIN_SV
+	LOGIN=`find /home/*/web -type d -name $DOMAIN_SV | cut -d/ -f3`
+else
+	DOMAIN_SV="$DOMAIN"
+fi
+
+echo $BACKUP > /tmp/backup_res.temp
+echo $LOGIN > /tmp/login_res.temp
+echo $DOMAIN > /tmp/domain_res.temp
+echo $DOMAIN_SV > /tmp/domain_sv_res.temp
+
+> /var/log/res_${DOMAIN_SV}_cp.info
+screen -dmS res_backup_cp
+screen -S res_backup_cp -p 0 -X stuff "res_backup_cp_start; exit"$(printf \\r)
+clear
+tail -f /var/log/res_${DOMAIN_SV}_cp.info

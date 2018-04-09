@@ -1,0 +1,54 @@
+# Variaveis:
+DOMINIO=`hostname | cut -d. -f2-10`
+
+# Criando o repo:
+cd /root
+wget http://rep.vitalhost.com.br/v2/ravim/completo/dados/repopmta.zip;
+unzip /root/repopmta.zip;
+rm -fr /root/repopmta.zip;
+mv -f repo /home/repo;
+chmod 777 /home/repo -R;
+
+echo "[Klaos-Base]
+name=Repositorio Klaos-Base
+baseurl=file:///home/repo
+enabled=1
+gpgcheck=0" > /etc/yum.repos.d/Local-Base.repo
+
+# Instalando o PowerMTA:
+yum install -y PowerMTA;
+
+# Permissoes e caminhos:
+cd /root
+wget http://rep.vitalhost.com.br/v2/ravim/completo/dados/patch.zip
+unzip /root/patch.zip
+rm -fr /root/patch.zip
+mv -f /root/license /etc/pmta/license
+mv -f /root/pmta /usr/sbin/pmta
+mv -f /root/pmtad /usr/sbin/pmtad
+mv -f /root/pmtahttpd /usr/sbin/pmtahttpd
+mv -f /root/pmtasnmpd /usr/sbin/pmtasnmpd
+
+chown pmta:pmta /etc/pmta/ -R
+chown root:pmta /usr/sbin/pmta*
+chmod 0750 /usr/sbin/pmta*
+
+# Leitura de arquivo:
+echo "* soft	nofile	16384" >> /etc/security/limits.conf
+echo "*	hard	nofile	32768" >> /etc/security/limits.conf
+
+curl -O http://rep.vitalhost.com.br/v4/vestacp/pmta.conf
+cat pmta.conf > /etc/pmta/config
+rm -f pmta.conf
+
+sed -i "s/DOMINIODOCLIENTE/$DOMINIO/g" /etc/pmta/config
+
+rm -Rf /home/repo
+chkconfig pmta on
+chkconfig pmtahttp on
+yum -y clean all
+clear
+service pmta restart
+service pmta reload
+service pmta restart
+reboot

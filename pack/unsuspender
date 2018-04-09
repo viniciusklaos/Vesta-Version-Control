@@ -1,0 +1,14 @@
+DOMAIN=$1
+if [ -z "$DOMAIN" ]; then
+	echo -e "Qual dominio da conta a ser REMOVIDA A SUSPENSAO?"
+	read DOMAIN
+fi
+
+USER=`find /home/*/web -type d -name $DOMAIN | cut -d/ -f3`
+
+if [ -z "$USER" ]; then
+	echo -e "Dominio nao encontrado no servidor."
+else
+	v-unsuspend-user $USER
+	echo "Foi removida a suspensao do dominio $DOMAIN."
+fi
