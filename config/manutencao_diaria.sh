@@ -2,7 +2,7 @@
 
 # ----  Variáveis globais  ---- #
 
-PATH=$PATH
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/vesta/bin
 DIAGERAL=`date | awk '{print $3}'`
 MESGERAL=`date | awk '{print $2}'`
 DATAGERAL="$DIAGERAL de $MESGERAL"
@@ -131,6 +131,9 @@ processar_logs_exim () {
 			rm -f ${LOG}.log-*;
 		fi
 	done;
+
+	find /var/log/exim -type f -name "*.tar" -mtime +15 | xargs rm -f {}/;
+
 	echo "Processado LOGs do EXIM - $DATAGERAL" >> /var/log/manutencao.log
 }
 
@@ -145,7 +148,15 @@ processar_emails (){
 		for conta in `find /home/*/web -type d -name $dominio | cut -d/ -f3`; do
         	for email in `find /home/$conta/mail/$dominio/ -type d  | cut -d/ -f6 | uniq | tail -n +2`; do
         	    find /home/$conta/mail/$dominio/$email/new/ -type f -daystart -mtime +2.5 | xargs rm -f {}/;
-        	    echo "Limpeza : /home/$conta/mail/$dominio/$email/new/ - $DATAGERAL"
+        	    echo "Limpeza : /home/$conta/mail/$dominio/$email/new/ - $DATAGERAL" >> /var/log/manutencao.log
+        	done;
+    	done;
+	done;
+	for dominio in `v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{print $1}' | sed '/vesta./d'`; do
+		for conta in `find /home/*/web -type d -name $dominio | cut -d/ -f3`; do
+        	for email in `find /home/$conta/mail/$dominio/ -type d  | cut -d/ -f6 | uniq | tail -n +2`; do
+        	    find /home/$conta/mail/$dominio/$email/cur/ -type f -daystart -mtime +2.5 | xargs rm -f {}/;
+        	    echo "Limpeza : /home/$conta/mail/$dominio/$email/cur/ - $DATAGERAL" >> /var/log/manutencao.log
         	done;
     	done;
 	done;

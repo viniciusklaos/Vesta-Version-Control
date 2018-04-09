@@ -124,9 +124,6 @@ else
 	echo ""
 	echo -e "${AMARELO}Este login da conta já existe, e o mesmo foi alterado para:${VERDE} $USER ${RESET}"
 	sleep 3
-	else
-		echo ""
-		sleep 0
 fi
 cd /home/vtinstall/vartemp/
 curl -s -O http://rep.vitalhost.com.br/v4/semcpanel/vitchun.info 2>> /dev/null
@@ -175,57 +172,4 @@ v-add-cron-job $USER \*/2 \* \* \* \* "php -f /home/$USER/web/$DOMAIN/public_htm
 v-add-cron-job $USER 0 \*/3 \* \* \* "php -f /home/$USER/web/$DOMAIN/public_html/admin/cron/limpeza.php" 2>> /dev/null
 echo "$DOMAIN: $IPDD" >> /etc/mailips
 echo "$DOMAIN: smtp.$DOMAIN" >> /etc/mailhelo
-
-echo "<?php
-
-define('SENDSTUDIO_DATABASE_TYPE', 'mysql');
-define('SENDSTUDIO_DATABASE_USER', '"$USER"_dbuser');
-define('SENDSTUDIO_DATABASE_PASS', '"$PASS"');
-define('SENDSTUDIO_DATABASE_HOST', 'localhost');
-define('SENDSTUDIO_DATABASE_NAME', '"$USER"_banco');
-define('SENDSTUDIO_DATABASE_UTF8PATCH', '1');
-define('SENDSTUDIO_TABLEPREFIX', 'email_');
-define('SENDSTUDIO_LICENSEKEY', 'Intecorp');
-define('SENDSTUDIO_APPLICATION_URL', 'http://"$DOMAIN"');
-define('SENDSTUDIO_IS_SETUP', 1);" > /home/$USER/web/$DOMAIN/public_html/admin/includes/config.php
-#
-cd /home/$USER/web
-curl -O http://rep.vitalhost.com.br/v4/vestacp/db.tar.gz 2>> /dev/null
-curl -O http://rep.vitalhost.com.br/v4/semcpanel/spamtraps.tar.gz 2>> /dev/null
-tar -vxzf db.tar.gz
-tar -vxzf spamtraps.tar.gz
-mysql "$USER"_banco < base1.sql
-mysql "$USER"_banco < spamtraps.sql
-rm -f spamtraps.tar.gz db.tar.gz base1.sql spamtraps.sql
-
-find /home/$USER/web/$DOMAIN/public_html/ -type f -exec chmod 644 '{}' \;
-find /home/$USER/web/$DOMAIN/public_html/ -type d -exec chmod 755 '{}' \;
-
-IEMLOGIN=`echo $DOMAIN | cut -d. -f1`
-
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'erros@${DOMAIN}' WHERE area = 'BOUNCE_ADDRESS';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'contato@${DOMAIN}' WHERE area = 'EMAIL_ADDRESS';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'mail.${DOMAIN}' WHERE area = 'BOUNCE_SERVER';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'erros@${DOMAIN}' WHERE area = 'BOUNCE_USERNAME';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = 'red17pmta' WHERE area = 'BOUNCE_PASSWORD';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = '/notls' WHERE area = 'BOUNCE_EXTRASETTINGS';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = '1' WHERE area = 'BOUNCE_AGREEDELETE';"
-mysql -u root ${USER}_banco -e "UPDATE email_config_settings SET areavalue = '1' WHERE area = 'BOUNCE_AGREEDELETEALL';"
-mysql -u root ${USER}_banco -e "UPDATE email_users SET emailaddress = 'contato@${DOMAIN}';"
-mysql -u root ${USER}_banco -e "UPDATE email_users SET usertimezone = 'GMT-3:00';"
-mysql -u root ${USER}_banco -e "UPDATE email_users SET username = '${IEMLOGIN}' WHERE username ='changeme';"
-mysql -u root ${USER}_banco -e "UPDATE email_users SET htmlfooter = '<img title="Novidade" alt="Novidade" height="42" width="242" src="http://${DOMAIN}/transparente.png">';"
-mysql -u root ${USER}_banco -e "UPDATE email_users SET textfooter = '';"
-mysql -u root ${USER}_banco -e "UPDATE email_users SET adminnotify_email = 'contato@${DOMAIN}';"
-mysql -u root ${USER}_banco -e "UPDATE user_script SET username = '${IEMLOGIN}' WHERE username = 'gemeosvt';"
-service named restart
-clear
-echo -e "${AMARELO}DNS:"
-echo "ns1.$DOMAIN > $MAINIP"
-echo "ns2.$DOMAIN > $SECIP"
-echo ""
-echo "Reverso:"
-echo -e "smtp.$DOMAIN > $IPDD"
-echo ""
-echo ""
 echo -e "Instalacao concluida.${RESET}"

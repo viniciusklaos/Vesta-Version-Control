@@ -1,0 +1,24 @@
+DIA=`date | awk '{print $3}'`
+MES=`date | awk '{print $2}'`
+DATA="$DIA-$MES"
+LOG=/var/log/vtbackup_$DATA.info
+
+DOMAIN=$1
+if [ -z "$DOMAIN" ]; then
+	echo -e "Qual dominio da conta a ser feito VTBACKUP?"
+	read DOMAIN
+fi
+
+USER=`find /home/*/web -type d -name $DOMAIN | cut -d/ -f3`
+
+if [ -z "$USER" ]; then
+	echo -e "Dominio nao encontrado no servidor."
+else
+	> $LOG
+	echo $DOMAIN > /tmp/dominio_vtbackup.temp
+	screen -dmS vt_backup
+	screen -S vt_backup -p 0 -X stuff "vtbackup_start; exit"$(printf \\r)
+	screen -dmS res_backup_cp
+	clear
+	tail -f $LOG
+fi

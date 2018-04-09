@@ -7,9 +7,8 @@ echo y | bash vst-install.sh --nginx no --apache yes --phpfpm no --named yes --r
 # Permissoes para o WEBMAIL funcionar
 chmod 777 /etc/roundcubemail/defaults.inc.php
 chmod 777 /etc/roundcubemail/config.inc.php
-# Criacao do MAILIPS, MAILHELO e EXIM.PL
+# Criacao do MAILIPS e EXIM.PL
 > /etc/mailips
-> /etc/mailhelo
 > /etc/exim/exim.pl
 # PUBLIC_HTML padrao
 if [ -d /usr/local/vesta/data/templates/web/skel/public_html ]; then
@@ -34,6 +33,7 @@ cat dedicar > /usr/local/bin/dedicar
 cat redirect > /usr/local/bin/redirect
 cat ipuso > /usr/local/bin/ipuso
 cat instalar > /usr/local/bin/instalar
+cat instalarsigno > /usr/local/bin/instalarsigno
 cat dominios > /usr/local/bin/dominios
 cat ips > /usr/local/bin/ips
 cat status > /usr/local/bin/status
@@ -42,10 +42,15 @@ cat res_backup_cp_start > /usr/local/bin/res_backup_cp_start
 cat suspender > /usr/local/bin/suspender
 cat unsuspender > /usr/local/bin/unsuspender
 cat installpmta > /usr/local/bin/installpmta
+cat vtbackup > /usr/local/bin/vtbackup
+cat vtbackup_start > /usr/local/bin/vtbackup_start
+cat manutencao > /usr/local/bin/manutencao
+cat manutencao_start > /usr/local/bin/manutencao_start
 #
 # Permissoes globais
 chmod a+x /usr/local/bin/ipuso
 chmod a+x /usr/local/bin/instalar
+chmod a+x /usr/local/bin/instalarsigno
 chmod a+x /usr/local/bin/dominios
 chmod a+x /usr/local/bin/ips
 chmod a+x /usr/local/bin/status
@@ -57,6 +62,10 @@ chmod a+x /usr/local/bin/res_backup_cp_start
 chmod a+x /usr/local/bin/unsuspender
 chmod a+x /usr/local/bin/suspender
 chmod a+x /usr/local/bin/installpmta
+chmod a+x /usr/local/bin/vtbackup
+chmod a+x /usr/local/bin/vtbackup_start
+chmod a+x /usr/local/bin/manutencao
+chmod a+x /usr/local/bin/manutencao_start
 #
 # Download dos configs do VESTA
 curl -O http://rep.vitalhost.com.br/v4/vestacp/config.zip
@@ -65,12 +74,17 @@ unzip -q config.zip
 cat php.ini > /etc/php.ini
 cat exim.conf > /etc/exim/exim.conf
 cat manutencao_diaria.sh > /home/vtinstall/scripts/manutencao_diaria.sh
+cat uptodate.sh > /home/vtinstall/scripts/uptodate.sh
+#
+chmod 777 /home/vtinstall/scripts/uptodate.sh
+chmod 777 /home/vtinstall/scripts/manutencao_diaria.sh
 #
 # Cron de gerenciamento
 echo "0 0 */1 * * sh /home/vtinstall/scripts/manutencao_diaria.sh" >> /var/spool/cron/root
+# Cron de update
+echo "0 8 * * * sh /home/vtinstall/scripts/uptodate.sh" >> /var/spool/cron/root
 #
 # Fallback hosts do EXIM
-sed -i "s/fallback_hosts = vesta.cartadeouro.com.br/fallback_hosts = vesta.$DOMAIN/g" /etc/exim/exim.conf
 sed -i "s/IPPRINCIPAL/$IPPRINCIPAL/g" /etc/exim/exim.conf
 #
 # Processamento EXIM

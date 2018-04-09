@@ -1,0 +1,123 @@
+# (env) PATH:
+
+# ----  Variáveis globais  ---- #
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/vesta/bin
+DIA=`date | awk '{print $3}'`
+MES=`date | awk '{print $2}'`
+DATA="$DIA-$MES"
+LOG=/var/log/manu_manual_$DATA.info
+
+
+# --------- Funcoes ----------- #
+
+limparexim (){
+	/etc/init.d/exim stop
+	cd /var/spool/exim/input
+	rm -Rf *
+	/etc/init.d/exim start
+	echo "Pasta spool do EXIM ultrapassou 25GB e foi excluido tudo." >> $LOG
+}
+
+limparpmta (){
+	/etc/init.d/pmta stop
+	cd /var/spool/pmta/
+	rm -Rf *
+	/etc/init.d/pmta start
+	echo "Pasta spool do PMTA ultrapassou 15GB e foi excluido tudo." >> $LOG
+}
+
+processar_spool_pmta (){
+	echo "Limpando a spool do PMTA..." >> $LOG
+	find /var/spool/pmta -type f -daystart -mtime +3.5 | xargs rm -f {}/;
+}
+
+processar_spool_exim (){
+	echo "Limpando a spool do EXIM..." >> $LOG
+	find /var/spool/exim/input -type f -daystart -mtime +3.5 | xargs rm -f {}/;
+}
+
+processar_logs_exim () {
+	echo "Processando LOGs do EXIM..." >> $LOG
+	cd /var/log/exim
+	
+	DIAX=`date | awk '{print $3}'`
+	MESX=`date | awk '{print $2}'`
+	DATAX="$DIAX-$MESX"
+	
+	array=("main" "panic" "reject")
+	
+	for LOGX in ${array[@]}; do
+		if [ -f ${LOGX}.log-* ]; then
+			tar -cf ${LOGX}_log_$DATAX.tar ${LOGX}.log-*
+			rm -f ${LOGX}.log-*;
+		fi
+	done;
+
+	find /var/log/exim -type f -name "*.tar" -mtime +15 | xargs rm -f {}/;
+}
+
+processar_backups (){
+	echo "Limpando a pasta de backups" >> $LOG
+	find /home/backup/ -name "admin.*" | xargs rm -f {}/;
+	find /home/backup/ -name "*.tar" -daystart -mtime +0.5 | xargs rm -f {}/;
+}
+
+processar_emails (){
+	for dominio in `v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{print $1}' | sed '/vesta./d'`; do
+		for conta in `find /home/*/web -type d -name $dominio | cut -d/ -f3`; do
+        	for email in `find /home/$conta/mail/$dominio/ -type d  | cut -d/ -f6 | uniq | tail -n +2`; do
+        	    find /home/$conta/mail/$dominio/$email/new/ -type f -daystart -mtime +2.5 | xargs rm -f {}/;
+        	    echo "Limpeza : /home/$conta/mail/$dominio/$email/new" >> $LOG
+        	done;
+    	done;
+	done;
+	for dominio in `v-list-users | tail -n +3 | awk '{print "v-list-web-domains "$1" | tail -n +3"}' | bash | awk '{print $1}' | sed '/vesta./d'`; do
+		for conta in `find /home/*/web -type d -name $dominio | cut -d/ -f3`; do
+        	for email in `find /home/$conta/mail/$dominio/ -type d  | cut -d/ -f6 | uniq | tail -n +2`; do
+        	    find /home/$conta/mail/$dominio/$email/cur/ -type f -daystart -mtime +2.5 | xargs rm -f {}/;
+        	    echo "Limpeza : /home/$conta/mail/$dominio/$email/cur" >> $LOG
+        	done;
+    	done;
+	done;
+}
+
+
+echo "Manutencao manual iniciada as: `date | awk '{print $4}'`" >> $LOG
+
+# Higienizacao do PMTA #
+if [ -f /etc/pmta/config ]; then
+	processar_spool_pmta;
+	PMTATAMANHO=`du -s /var/spool/pmta | awk '{print $1}'`
+	echo "Pasta SPOOL do PMTA com: $PMTATAMANHO K" >> $LOG
+	echo "$PMTATAMANHO" | grep -q G && PMTATAMANHO=`echo "$PMTATAMANHO" | cut -d'G' -f1` || sleep 0;
+	echo "$PMTATAMANHO" | grep -q M && PMTATAMANHO=`echo "$PMTATAMANHO" | cut -d'M' -f1` || sleep 0;
+	echo "$PMTATAMANHO" | grep -q K && PMTATAMANHO=`echo "$PMTATAMANHO" | cut -d'K' -f1` || sleep 0;
+	PMTATAMANHO=`echo $PMTATAMANHO | bc | cut -d. -f1`
+	if [ $PMTATAMANHO -ge "15728640" ]; then
+        limparpmta;
+	fi
+fi
+
+# Higienizacao do EXIM #
+processar_logs_exim;
+processar_spool_exim;
+
+EXIMTAMANHO=`du -s /var/spool/exim/input | awk '{print $1}'`
+echo "Pasta SPOOL do EXIM com: $EXIMTAMANHO K" >> $LOG
+echo "$EXIMTAMANHO" | grep -q G && EXIMTAMANHO=`echo "$EXIMTAMANHO" | cut -d'G' -f1` || sleep 0;
+echo "$EXIMTAMANHO" | grep -q M && EXIMTAMANHO=`echo "$EXIMTAMANHO" | cut -d'M' -f1` || sleep 0;
+echo "$EXIMTAMANHO" | grep -q K && EXIMTAMANHO=`echo "$EXIMTAMANHO" | cut -d'K' -f1` || sleep 0;
+EXIMTAMANHO=`echo $EXIMTAMANHO | bc | cut -d. -f1`
+
+if [ $EXIMTAMANHO -ge "26214400" ]; then
+        limparexim;
+fi
+
+# Higienizacao dos backups #
+processar_backups;
+
+# Higienizacao dos e-mails #
+processar_emails;
+
+echo "Manutencao manual finalizada as: `date | awk '{print $4}'`" >> $LOG

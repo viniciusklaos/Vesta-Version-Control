@@ -1,0 +1,26 @@
+DIA=`date | awk '{print $3}'`
+MES=`date | awk '{print $2}'`
+DATA="$DIA-$MES"
+LOG=/var/log/vtbackup_$DATA.info
+DOMAIN=`cat /tmp/dominio_vtbackup.temp`
+
+echo "[$DOMAIN]" >> $LOG
+echo "VTBackup iniciado em: `date | awk '{print $4}'`" >> $LOG
+cd /home
+mkdir $DOMAIN
+cd $DOMAIN
+mkdir banco
+cd /home/$USER/web/$DOMAIN/public_html/
+echo "Gerando dados da public_html..." >> $LOG
+tar -cf public_html.tar *
+gzip -9 public_html.tar
+mv public_html.tar.gz /home/$DOMAIN
+cd /home/$DOMAIN/banco
+echo "Gerando dados do banco..." >> $LOG
+mysqldump ${USER}_banco > dados.sql
+cd /home
+tar -cf ${DOMAIN}.tar $DOMAIN
+gzip -9 ${DOMAIN}.tar
+rm -Rf ${DOMAIN}
+echo "VTBackup finalizado em: `date | awk '{print $4}'`" >> $LOG
+echo "[EXIT]" >> $LOG
