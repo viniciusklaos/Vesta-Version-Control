@@ -132,7 +132,7 @@ rm -f /home/vtinstall/vartemp/vitchun.info
 MAINIP=`v-list-sys-ips | tail -n +3 | tail -2 | awk '{print $1}' | head -1`
 SECIP=`v-list-sys-ips | tail -n +3 | tail -2 | awk '{print $1}' | tail -1`
 SPF=`ip a | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -f1 -d/ | cut -f1-3 -d. | uniq | sed 's/^/+ip4:/' | sed 's/$/.0\/24 /' | sed 's/ //g' |sed ':a;$!N;s/\n/ /;ta;'`
-v-add-user $USER $PASS contato@$DOMAIN default $DOMAIN Vesta 2>> /dev/null
+v-add-user $USER $PASS contato@$DOMAIN default $USER Vesta 2>> /dev/null
 v-add-domain $USER $DOMAIN $MAINIP 2>> /dev/null
 
 v-change-dns-domain-tpl $USER $DOMAIN child-ns no 2>> /dev/null
@@ -142,7 +142,7 @@ NS2FIELD=`v-list-dns-records $USER $DOMAIN | grep -w ns2.*.A | awk '{print $1}'`
 SPFIELD=`v-list-dns-records $USER $DOMAIN | grep -w  v=spf1 | awk '{print $1}'`
 
 v-change-dns-record $USER $DOMAIN $NS2FIELD $SECIP 2>> /dev/null
-v-change-dns-record $USER $DOMAIN $SPFIELD "\"v=spf1 +a +mx $SPF ~all\"" 2>> /dev/null
+v-change-dns-record $USER $DOMAIN $SPFIELD "v=spf1 +a +mx $SPF ~all" 2>> /dev/null
 v-add-dns-record $USER $DOMAIN vesta A $MAINIP 2>> /dev/null
 
 for SMTPFIELD in `v-list-dns-records $USER $DOMAIN | grep -w smtp | awk '{print $1}'`; do
