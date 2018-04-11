@@ -1,7 +1,7 @@
 DIA=`date | awk '{print $3}'`
 MES=`date | awk '{print $2}'`
 DATA="$DIA-$MES"
-LOG=/var/log/manu_manual_$DATA.info
+LOG="/var/log/manu_manual_$DATA.info"
 
 screen -dmS manu_manual
 screen -S manu_manual -p 0 -X stuff "manutencao_start; exit"$(printf \\r)
